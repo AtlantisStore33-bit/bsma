@@ -1900,35 +1900,16 @@
                     </div>
 
                     <div class="card" style="margin-top:14px;">
-                        <h3 class="section-title">المزامنة السحابية بين الهواتف</h3>
-                        <p class="text-secondary fs-13" style="margin-bottom:14px;">لتتمكن من الدخول بنفس رمزك من أي هاتف والعثور على نفس بياناتك تلقائياً، تحتاج مرة واحدة فقط لربط التطبيق بقاعدة بيانات مجانية من Firebase (لا تحتاج بطاقة دفع). بدون هذه الخطوة، يعمل رمز الدخول كقفل محلي فقط وتبقى بياناتك محفوظة داخل هذا الهاتف ويمكنك نقلها يدوياً من صفحة «النسخ الاحتياطي».</p>
+                        <h3 class="section-title">المزامنة بين الهواتف</h3>
+                        <p class="text-secondary fs-13" style="margin-bottom:14px;">مفعّلة تلقائياً بدون أي إعداد. أي هاتف يدخل بنفس رمز الدخول أعلاه يجد نفس بياناتك فوراً. بياناتك محفوظة دائماً داخل هذا الهاتف أولاً (لا تُفقد حتى بدون إنترنت)، وتُنسخ في الخلفية كل مرة تضيف أو تعدّل شيئاً.</p>
                         <div class="settings-row">
-                            <div><div class="settings-row__label">تفعيل المزامنة السحابية</div></div>
+                            <div><div class="settings-row__label">المزامنة التلقائية</div></div>
                             <div class="settings-row__control"><button class="btn" id="setSyncToggleBtn" style="width:100%;padding:13px;">تفعيل / إيقاف</button></div>
                         </div>
-                        <div class="settings-row">
-                            <div><div class="settings-row__label">Project ID</div><div class="settings-row__desc">من إعدادات مشروع Firebase</div></div>
-                            <div class="settings-row__control"><input class="input" id="setFbProjectId" placeholder="my-store-12345" dir="ltr" style="text-align:left;"></div>
-                        </div>
-                        <div class="settings-row">
-                            <div><div class="settings-row__label">Web API Key</div><div class="settings-row__desc">من إعدادات مشروع Firebase</div></div>
-                            <div class="settings-row__control"><input class="input" id="setFbApiKey" placeholder="AIzaSy..." dir="ltr" style="text-align:left;"></div>
-                        </div>
-                        <div style="margin-top:14px;display:flex;gap:10px;">
-                            <button class="btn btn--primary" id="btnSaveSyncSettings" style="flex:1;padding:14px;">حفظ إعدادات المزامنة</button>
-                            <button class="btn" id="btnSyncNow" style="flex:1;padding:14px;">مزامنة الآن</button>
+                        <div style="margin-top:14px;">
+                            <button class="btn btn--primary" id="btnSyncNow" style="width:100%;padding:14px;">مزامنة الآن</button>
                         </div>
                         <div class="text-secondary fs-12" id="syncStatusText" style="margin-top:12px;"></div>
-                        <details style="margin-top:14px;">
-                            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--accent-lilac);">كيف أحصل على هذه البيانات؟ (خطوات سريعة)</summary>
-                            <ol class="text-secondary fs-12" style="margin:10px 0 0;padding-inline-start:18px;line-height:2;">
-                                <li>افتح console.firebase.google.com وسجّل دخولك بحساب Google</li>
-                                <li>أنشئ مشروعاً جديداً (مجاني بالكامل)</li>
-                                <li>من القائمة الجانبية اختر Firestore Database ثم Create database، واختر وضع Test mode</li>
-                                <li>من إعدادات المشروع (⚙️) انسخ Project ID، وأنشئ تطبيق ويب (Web app) لتحصل على apiKey</li>
-                                <li>ألصق القيمتين بالأعلى واضغط حفظ ثم مزامنة الآن</li>
-                            </ol>
-                        </details>
                     </div>
                 </section>
 
@@ -2501,9 +2482,7 @@
                     invoiceFooter: 'شكراً لثقتكم بنا',
                     theme: 'dark',
                     accessCode: '1234',
-                    syncEnabled: false,
-                    fbProjectId: '',
-                    fbApiKey: '',
+                    syncEnabled: true,
                     lastSyncAt: ''
                 },
                 currentView: 'dashboard',
@@ -4323,45 +4302,33 @@
                 }
             }
 
-            function fsBase() {
-                const pid = (state.settings.fbProjectId || '').trim();
-                const key = (state.settings.fbApiKey || '').trim();
-                if (!pid || !key) return null;
-                return { pid, key };
-            }
+            /* رقم تخزين ثابت وعشوائي خاص بهذا التطبيق (Bucket) — يضمن عدم تصادم بياناتك مع أي مستخدم آخر */
+            const SYNC_STORE_ID = 'p8yY65HVNAPcG18SFDDcFn8RNpmB4vCG8hTPe9hq';
 
-            function fsDocUrl(code) {
-                const b = fsBase();
-                if (!b || !code) return null;
-                return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(b.pid)}/databases/(default)/documents/storeSync/${encodeURIComponent(code)}?key=${encodeURIComponent(b.key)}`;
+            function syncUrl(code) {
+                if (!code) return null;
+                return `https://kvdb.io/${SYNC_STORE_ID}/${encodeURIComponent(code)}`;
             }
 
             async function pullFromCloud(code) {
-                const url = fsDocUrl(code);
+                const url = syncUrl(code);
                 if (!url) return null;
-                const res = await fetch(url);
+                const res = await fetch(url, { cache: 'no-store' });
                 if (res.status === 404) return null;
                 if (!res.ok) throw new Error('cloud-fetch-failed');
-                const json = await res.json();
-                const field = json.fields && json.fields.json;
-                if (!field || !field.stringValue) return null;
-                try { return JSON.parse(field.stringValue); } catch (e) { return null; }
+                const text = await res.text();
+                if (!text) return null;
+                try { return JSON.parse(text); } catch (e) { return null; }
             }
 
             async function pushToCloud(code) {
-                const url = fsDocUrl(code);
+                const url = syncUrl(code);
                 if (!url) return false;
                 const snap = buildSnapshot();
-                const body = {
-                    fields: {
-                        json: { stringValue: JSON.stringify(snap) },
-                        updatedAt: { timestampValue: new Date().toISOString() }
-                    }
-                };
                 const res = await fetch(url, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(snap)
                 });
                 if (!res.ok) throw new Error('cloud-push-failed');
                 state.settings.lastSyncAt = new Date().toISOString();
@@ -4374,7 +4341,6 @@
             function scheduleCloudSync() {
                 if (suppressSync) return;
                 if (!state.settings.syncEnabled) return;
-                if (!fsBase()) return;
                 if (!state.settings.accessCode) return;
                 clearTimeout(syncDebounceTimer);
                 syncDebounceTimer = setTimeout(() => {
@@ -4383,7 +4349,7 @@
                         if (el) el.textContent = 'تمت آخر مزامنة: ' + new Date().toLocaleString('ar-EG');
                     }).catch(() => {
                         const el = document.getElementById('syncStatusText');
-                        if (el) el.textContent = 'تعذرت آخر محاولة مزامنة، سيُعاد المحاولة عند أي تعديل جديد';
+                        if (el) el.textContent = 'تعذرت آخر محاولة مزامنة (تحقق من الإنترنت)، سيُعاد المحاولة عند أي تعديل جديد';
                     });
                 }, 2000);
             }
@@ -4391,8 +4357,7 @@
             function refreshSyncStatusText() {
                 const el = document.getElementById('syncStatusText');
                 if (!el) return;
-                if (!state.settings.syncEnabled) { el.textContent = 'المزامنة السحابية غير مفعّلة حالياً'; return; }
-                if (!fsBase()) { el.textContent = 'أدخل Project ID وWeb API Key ثم احفظ لتفعيل المزامنة'; return; }
+                if (!state.settings.syncEnabled) { el.textContent = 'المزامنة غير مفعّلة حالياً — بياناتك محفوظة على هذا الهاتف فقط'; return; }
                 el.textContent = state.settings.lastSyncAt ?
                     'تمت آخر مزامنة: ' + new Date(state.settings.lastSyncAt).toLocaleString('ar-EG') :
                     'المزامنة مفعّلة، بانتظار أول عملية مزامنة';
@@ -4402,27 +4367,17 @@
                 state.settings.syncEnabled = !state.settings.syncEnabled;
                 await DB.setSetting('syncEnabled', state.settings.syncEnabled);
                 refreshSyncStatusText();
-                toast(state.settings.syncEnabled ? 'تم تفعيل المزامنة السحابية' : 'تم إيقاف المزامنة السحابية', 'success');
+                toast(state.settings.syncEnabled ? 'تم تفعيل المزامنة' : 'تم إيقاف المزامنة', 'success');
                 if (state.settings.syncEnabled) scheduleCloudSync();
             });
 
-            document.getElementById('btnSaveSyncSettings').addEventListener('click', async () => {
-                state.settings.fbProjectId = document.getElementById('setFbProjectId').value.trim();
-                state.settings.fbApiKey = document.getElementById('setFbApiKey').value.trim();
-                await DB.setSetting('fbProjectId', state.settings.fbProjectId);
-                await DB.setSetting('fbApiKey', state.settings.fbApiKey);
-                refreshSyncStatusText();
-                toast('تم حفظ إعدادات المزامنة', 'success');
-            });
-
             document.getElementById('btnSyncNow').addEventListener('click', async () => {
-                if (!fsBase()) { toast('أدخل بيانات Firebase أولاً', 'danger'); return; }
                 try {
                     await pushToCloud(state.settings.accessCode);
                     refreshSyncStatusText();
                     toast('تمت المزامنة بنجاح', 'success');
                 } catch (err) {
-                    toast('تعذر الاتصال بالسحابة، تحقق من الإعدادات والاتصال بالإنترنت', 'danger');
+                    toast('تعذر الاتصال بالإنترنت للمزامنة، حاول مرة أخرى', 'danger');
                 }
             });
 
@@ -4451,8 +4406,6 @@
                     `<img src="${state.settings.logo}" style="width:100%;height:100%;object-fit:cover;">` :
                     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7l9-4 9 4-9 4-9-4z"/></svg>';
                 document.getElementById('setAccessCode').value = state.settings.accessCode || '1234';
-                document.getElementById('setFbProjectId').value = state.settings.fbProjectId || '';
-                document.getElementById('setFbApiKey').value = state.settings.fbApiKey || '';
                 refreshSyncStatusText();
             }
 
@@ -4603,7 +4556,7 @@
                 state.expenses = await DB.getAll('expenses');
                 state.returns = await DB.getAll('returns');
                 state.movements = await DB.getAll('inventoryMovements');
-                const keys = ['storeName', 'currency', 'logo', 'phone', 'email', 'address', 'taxRate', 'lowStockThreshold', 'invoiceFooter', 'theme', 'accessCode', 'syncEnabled', 'fbProjectId', 'fbApiKey', 'lastSyncAt'];
+                const keys = ['storeName', 'currency', 'logo', 'phone', 'email', 'address', 'taxRate', 'lowStockThreshold', 'invoiceFooter', 'theme', 'accessCode', 'syncEnabled', 'lastSyncAt'];
                 for (const key of keys) {
                     const val = await DB.getSetting(key);
                     if (val !== null && val !== undefined) state.settings[key] = val;
@@ -4640,8 +4593,8 @@
                 const errEl = document.getElementById('lockError');
                 const statusEl = document.getElementById('lockSyncStatus');
 
-                statusEl.textContent = (state.settings.syncEnabled && fsBase()) ?
-                    'المزامنة السحابية مفعّلة لهذا الرمز' : '';
+                statusEl.textContent = state.settings.syncEnabled ?
+                    'المزامنة مفعّلة لهذا الرمز' : '';
 
                 async function attemptUnlock() {
                     const entered = (input.value || '').trim();
@@ -4651,7 +4604,7 @@
                     btn.textContent = 'جارٍ التحقق...';
                     try {
                         let unlocked = false;
-                        if (state.settings.syncEnabled && fsBase()) {
+                        if (state.settings.syncEnabled) {
                             try {
                                 const cloudData = await pullFromCloud(entered);
                                 if (cloudData) {
