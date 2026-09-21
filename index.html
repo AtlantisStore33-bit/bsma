@@ -1901,7 +1901,7 @@
 
                     <div class="card" style="margin-top:14px;">
                         <h3 class="section-title">المزامنة بين الهواتف</h3>
-                        <p class="text-secondary fs-13" style="margin-bottom:14px;">مفعّلة تلقائياً بدون أي إعداد. أي هاتف يدخل بنفس رمز الدخول أعلاه يجد نفس بياناتك فوراً. بياناتك محفوظة دائماً داخل هذا الهاتف أولاً (لا تُفقد حتى بدون إنترنت)، وتُنسخ في الخلفية كل مرة تضيف أو تعدّل شيئاً.</p>
+                        <p class="text-secondary fs-13" style="margin-bottom:14px;">مفعّلة تلقائياً وتستخدم قاعدة بياناتك الخاصة على Firebase. أي هاتف يدخل بنفس رمز الدخول أعلاه يجد نفس بياناتك فوراً. بياناتك محفوظة دائماً داخل هذا الهاتف أولاً (لا تُفقد حتى بدون إنترنت)، وتُنسخ في الخلفية كل مرة تضيف أو تعدّل شيئاً.</p>
                         <div class="settings-row">
                             <div><div class="settings-row__label">المزامنة التلقائية</div></div>
                             <div class="settings-row__control"><button class="btn" id="setSyncToggleBtn" style="width:100%;padding:13px;">تفعيل / إيقاف</button></div>
@@ -4302,23 +4302,21 @@
                 }
             }
 
-            /* رقم تخزين ثابت وعشوائي خاص بهذا التطبيق (Bucket) — يضمن عدم تصادم بياناتك مع أي مستخدم آخر */
-            const SYNC_STORE_ID = 'p8yY65HVNAPcG18SFDDcFn8RNpmB4vCG8hTPe9hq';
+            /* قاعدة بيانات Firebase الخاصة بمتجرك (Realtime Database) */
+            const FIREBASE_DB_URL = 'https://bsma-4bdef-default-rtdb.firebaseio.com';
 
             function syncUrl(code) {
                 if (!code) return null;
-                return `https://kvdb.io/${SYNC_STORE_ID}/${encodeURIComponent(code)}`;
+                return `${FIREBASE_DB_URL}/storeSync/${encodeURIComponent(code)}.json`;
             }
 
             async function pullFromCloud(code) {
                 const url = syncUrl(code);
                 if (!url) return null;
                 const res = await fetch(url, { cache: 'no-store' });
-                if (res.status === 404) return null;
-                if (!res.ok) throw new Error('cloud-fetch-failed');
-                const text = await res.text();
-                if (!text) return null;
-                try { return JSON.parse(text); } catch (e) { return null; }
+                if (!res.ok) throw new Error('cloud-fetch-failed:' + res.status);
+                const data = await res.json();
+                return data || null;
             }
 
             async function pushToCloud(code) {
@@ -4326,11 +4324,11 @@
                 if (!url) return false;
                 const snap = buildSnapshot();
                 const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(snap)
                 });
-                if (!res.ok) throw new Error('cloud-push-failed');
+                if (!res.ok) throw new Error('cloud-push-failed:' + res.status);
                 state.settings.lastSyncAt = new Date().toISOString();
                 await DB.setSetting('lastSyncAt', state.settings.lastSyncAt);
                 return true;
@@ -4377,7 +4375,12 @@
                     refreshSyncStatusText();
                     toast('تمت المزامنة بنجاح', 'success');
                 } catch (err) {
-                    toast('تعذر الاتصال بالإنترنت للمزامنة، حاول مرة أخرى', 'danger');
+                    const msg = (err && err.message) || '';
+                    if (msg.includes(':401') || msg.includes(':403')) {
+                        toast('تم رفض الاتصال من Firebase — تحقق من قواعد الأمان (Rules) في Realtime Database', 'danger');
+                    } else {
+                        toast('تعذر الاتصال بالإنترنت للمزامنة، حاول مرة أخرى', 'danger');
+                    }
                 }
             });
 
