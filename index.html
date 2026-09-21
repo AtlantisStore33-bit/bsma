@@ -1532,6 +1532,7 @@
                                         <th data-sort="paid">المدفوع</th>
                                         <th data-sort="remaining">المتبقي</th>
                                         <th data-sort="paymentMethod">طريقة الدفع</th>
+                                        <th data-sort="profit">المكسب</th>
                                         <th style="width:120px;">إجراءات</th>
                                 </tr></thead>
                                 <tbody id="salesTbody"></tbody>
@@ -3333,6 +3334,7 @@
                         <td data-label="المدفوع">${fmtMoney(s.paid)}</td>
                         <td data-label="المتبقي" style="color:${s.remaining > 0 ? 'var(--danger)' : 'inherit'};font-weight:${s.remaining>0?'700':'400'};">${fmtMoney(s.remaining)}</td>
                         <td data-label="طريقة الدفع">${esc(s.paymentMethod || '—')}</td>
+                        <td data-label="المكسب" class="no-print" style="color:var(--success);font-weight:700;">${fmtMoney(s.profit || 0)}</td>
                         <td class="cell-actions">
                             <div class="row-actions">
                                 <button class="btn" data-view-invoice="${s.id}">فاتورة</button>
